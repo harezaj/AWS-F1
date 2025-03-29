@@ -11,7 +11,7 @@ provider "aws" {
   region = var.aws_region
 }
 
-# S3 bucket for raw F1 data
+# Create a bucket to store raw F1 data
 resource "aws_s3_bucket" "f1_raw_data" {
   bucket = var.s3_bucket_name
 
@@ -21,7 +21,7 @@ resource "aws_s3_bucket" "f1_raw_data" {
   }
 }
 
-# Prevent accidental deletion of this S3 bucket
+# Clean up old data after 1 day to keep things tidy
 resource "aws_s3_bucket_lifecycle_configuration" "f1_raw_data" {
   bucket = aws_s3_bucket.f1_raw_data.id
 
@@ -30,12 +30,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "f1_raw_data" {
     status = "Enabled"
 
     expiration {
-      days = 7  # Keep raw data for 7 days
+      days = 1
     }
   }
 }
 
-# Enable versioning for the S3 bucket
+# Keep track of file versions in case we need to roll back
 resource "aws_s3_bucket_versioning" "f1_raw_data" {
   bucket = aws_s3_bucket.f1_raw_data.id
   versioning_configuration {
@@ -43,7 +43,7 @@ resource "aws_s3_bucket_versioning" "f1_raw_data" {
   }
 }
 
-# Block public access to the S3 bucket
+# Lock down the bucket - no public access allowed
 resource "aws_s3_bucket_public_access_block" "f1_raw_data" {
   bucket = aws_s3_bucket.f1_raw_data.id
 
@@ -53,7 +53,7 @@ resource "aws_s3_bucket_public_access_block" "f1_raw_data" {
   restrict_public_buckets = true
 }
 
-# IAM role for Lambda functions
+# Set up a role for Lambda functions
 resource "aws_iam_role" "lambda_role" {
   name = "f1-data-lambda-role"
 
@@ -76,7 +76,7 @@ resource "aws_iam_role" "lambda_role" {
   }
 }
 
-# IAM policy for Lambda functions
+# Give Lambda functions permission to work with S3 and CloudWatch
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "f1-data-lambda-policy"
   role = aws_iam_role.lambda_role.id
@@ -110,8 +110,31 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-# Attach basic Lambda execution policy
+# Add the basic Lambda execution policy
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Create Lambda function to fetch F1 data
+resource "aws_lambda_function" "f1_data_fetcher" {
+  filename         = "../lambda/function.zip"
+  function_name    = "f1-data-fetcher"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "lambda_function.lambda_handler"
+  runtime         = "python3.9"
+  timeout         = 300  # Give it 5 minutes to run
+  memory_size     = 256
+  source_code_hash = filebase64sha256("../lambda/function.zip")
+
+  environment {
+    variables = {
+      S3_BUCKET_NAME = aws_s3_bucket.f1_raw_data.id
+    }
+  }
+
+  tags = {
+    Name        = "f1-data-fetcher"
+    Environment = var.environment
+  }
 }
