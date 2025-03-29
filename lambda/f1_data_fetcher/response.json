@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"message\": \"F1 race data fetched and saved\", \"race_date\": null, \"country\": \"Monaco\", \"circuit\": \"Monte Carlo\", \"session_name\": \"Race\", \"session_key\": 9094, \"endpoints_processed\": [\"drivers\", \"laps\", \"stints\", \"weather\"]}"}

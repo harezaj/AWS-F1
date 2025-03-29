@@ -1,121 +1,146 @@
 import json
 import os
-import time
-from datetime import datetime, timedelta
 import requests
 import boto3
-from botocore.exceptions import ClientError
+from datetime import datetime
 
 # Initialize S3 client
-s3_client = boto3.client('s3')
+s3 = boto3.client('s3')
+BUCKET_NAME = os.environ['S3_BUCKET_NAME']
 
-def get_race_data(race_date):
-    """
-    Fetch F1 race data from OpenF1 API for a specific date.
-    Returns a dictionary containing all available data points.
-    """
-    base_url = "https://api.openf1.org/v1"
-    
-    # Define endpoints to fetch
-    endpoints = {
-        'drivers': '/drivers',
-        'teams': '/teams',
-        'races': '/races',
-        'results': '/results',
-        'laps': '/laps',
-        'car_data': '/car_data',
-        'weather': '/weather',
-        'team_radio': '/team_radio',
-        'race_control': '/race_control'
-    }
-    
-    data = {}
-    
-    for endpoint, path in endpoints.items():
-        try:
-            # Add delay to respect API rate limits
-            time.sleep(1)
-            
-            # Construct query parameters
-            params = {
-                'date': race_date,
-                'format': 'json'
-            }
-            
-            # Make API request
-            response = requests.get(f"{base_url}{path}", params=params)
-            response.raise_for_status()
-            
-            # Store the data
-            data[endpoint] = response.json()
-            
-        except requests.exceptions.RequestException as e:
-            print(f"failed to fetch {endpoint}: {str(e)}")
-            data[endpoint] = []
-            
-    return data
+# OpenF1 API base URL
+BASE_URL = 'https://api.openf1.org/v1'
 
-def save_to_s3(data, race_date):
-    """
-    Save the fetched data to S3 bucket.
-    """
-    bucket_name = os.environ['S3_BUCKET_NAME']
+# Define endpoints to fetch
+endpoints = {
+    'drivers': '/drivers',
+    'pit': '/pit',
+    'stints': '/stints',
+    'weather': '/weather'
+}
+
+def get_session_key(race_date=None, country_name=None, year=None):
+    """Get the session key for a race based on date, country or year."""
+    print(f"Fetching session key for race: date={race_date}, country={country_name}, year={year}")
     
-    # Create a timestamp for the file name
+    params = {}
+    if race_date:
+        # Use the direct date_start parameter for the API
+        params['date_start'] = race_date
+    
+    if country_name:
+        params['country_name'] = country_name
+    
+    if year:
+        params['year'] = year
+    
+    if 'session_type' not in params:
+        params['session_type'] = 'Race'
+    
+    print(f"Querying sessions API with params: {params}")
+    response = requests.get(f"{BASE_URL}/sessions", params=params)
+    if response.status_code == 200:
+        sessions = response.json()
+        if sessions:
+            session = sessions[0]
+            print(f"Found session: {session}")
+            return session
+    
+    print(f"No session found with parameters: {params}")
+    return None
+
+def fetch_data(endpoint, session_key):
+    """Fetch data from a specific endpoint for a given session."""
+    print(f"Fetching data from {endpoint} for session {session_key}")
+    
+    params = {'session_key': session_key}
+    
+    try:
+        response = requests.get(f"{BASE_URL}{endpoint}", params=params)
+        if response.status_code == 200:
+            data = response.json()
+            print(f"Retrieved {len(data)} records from {endpoint}")
+            return data
+        else:
+            print(f"Error fetching {endpoint}: {response.status_code}")
+    except Exception as e:
+        print(f"Exception fetching {endpoint}: {str(e)}")
+    
+    return []
+
+def save_to_s3(data, race_date, data_type, session_info):
+    """Save data to S3."""
+    if not data:
+        print(f"No {data_type} data to save")
+        return
+        
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    circuit_name = session_info.get('circuit_short_name', 'unknown')
+    s3_key = f'raw/{race_date}/{circuit_name}/{data_type}_{timestamp}.json'
     
-    # Save each data type as a separate file
-    for data_type, content in data.items():
-        if content:  # Only save if we have data
-            file_name = f"raw/{race_date}/{data_type}_{timestamp}.json"
-            
-            try:
-                # Convert data to JSON string
-                json_data = json.dumps(content)
-                
-                # Upload to S3
-                s3_client.put_object(
-                    Bucket=bucket_name,
-                    Key=file_name,
-                    Body=json_data,
-                    ContentType='application/json'
-                )
-                
-                print(f"saved {file_name}")
-                
-            except ClientError as e:
-                print(f"failed to save {file_name}: {str(e)}")
-                raise
+    try:
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Body=json.dumps(data),
+            ContentType='application/json'
+        )
+        print(f"Saved {len(data)} {data_type} records to s3://{BUCKET_NAME}/{s3_key}")
+        return True
+    except Exception as e:
+        print(f"Failed to save {data_type} to S3: {str(e)}")
+        return False
 
 def lambda_handler(event, context):
-    """
-    Main Lambda handler function.
-    """
+    """Main Lambda handler function."""
     try:
-        # Get yesterday's date (assuming race was yesterday)
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        # Get parameters from event
+        race_date = event.get('race_date')
+        country_name = event.get('country_name')
+        year = event.get('year')
         
-        # Fetch race data
-        print(f"fetching data for {yesterday}")
-        race_data = get_race_data(yesterday)
+        # At least one parameter is required
+        if not any([race_date, country_name, year]):
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'At least one of race_date, country_name, or year is required'})
+            }
+
+        # Get session info for the race
+        session_info = get_session_key(race_date, country_name, year)
+        if not session_info:
+            return {
+                'statusCode': 404,
+                'body': json.dumps({'error': f'No race session found for the provided parameters'})
+            }
         
-        # Save to S3
-        print("Saving data to S3")
-        save_to_s3(race_data, yesterday)
-        
+        # Extract session key from the session info
+        session_key = session_info['session_key']
+
+        # Fetch and save data for each endpoint
+        processed_endpoints = []
+        for endpoint_name, endpoint_path in endpoints.items():
+            data = fetch_data(endpoint_path, session_key)
+            if data:
+                save_to_s3(data, race_date, endpoint_name, session_info)
+                processed_endpoints.append(endpoint_name)
+
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'message': 'data fetched and saved',
-                'date': yesterday
+                'message': 'F1 race data fetched and saved',
+                'race_date': race_date,
+                'country': session_info.get('country_name'),
+                'circuit': session_info.get('circuit_short_name'),
+                'session_name': session_info.get('session_name'),
+                'session_key': session_key,
+                'endpoints_processed': processed_endpoints
             })
         }
-        
+
     except Exception as e:
-        print(f"error: {str(e)}")
+        print(f"Error: {str(e)}")
         return {
             'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
+            'body': json.dumps({'error': str(e)})
         } 

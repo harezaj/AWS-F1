@@ -1,0 +1,11 @@
+{
+  "version": "0",
+  "id": "test-event-id",
+  "detail-type": "Scheduled Event",
+  "source": "aws.events",
+  "account": "123456789012",
+  "time": "2025-03-23T00:00:00Z",
+  "region": "us-east-1",
+  "detail": {},
+  "race_date": "2025-03-23"
+} 

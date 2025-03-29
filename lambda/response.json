@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"message\": \"F1 race data fetched and saved\", \"race_date\": \"2025-03-23\", \"country\": \"China\", \"circuit\": \"Shanghai\", \"session_name\": \"Race\", \"session_key\": 9998, \"endpoints_processed\": [\"drivers\", \"pit\", \"stints\", \"weather\"]}"}
