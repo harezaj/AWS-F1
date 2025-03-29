@@ -1,41 +1,33 @@
-# F1 Data Explorer - Terraform Configuration
+# F1 Data Explorer - Terraform
 
-This directory contains the Terraform configuration for the F1 Data Explorer project's AWS infrastructure.
+terraform config for f1 data pipeline
 
-## Prerequisites
+## setup
 
-- AWS CLI installed and configured
-- Terraform installed
-- AWS credentials with appropriate permissions
-
-## Resources Created
-
-- S3 bucket for storing raw F1 data
-- S3 bucket lifecycle rules for data cleanup
-- S3 bucket versioning
-- S3 bucket public access blocking
-
-## Usage
-
-1. Initialize Terraform:
+1. init terraform:
    ```bash
    terraform init
    ```
 
-2. Review the planned changes:
+2. check changes:
    ```bash
    terraform plan
    ```
 
-3. Apply the configuration:
+3. apply changes:
    ```bash
    terraform apply
    ```
 
-4. To destroy the infrastructure:
+4. destroy:
    ```bash
    terraform destroy
    ```
+
+## resources
+
+- s3 bucket for raw data
+- lambda role with s3 and cloudwatch permissions
 
 ## Variables
 
