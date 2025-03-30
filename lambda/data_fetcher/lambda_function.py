@@ -89,17 +89,23 @@ def lambda_handler(event, context):
     race_date = None
     if 'race_date' in event:
         race_date = event['race_date']
+        # Check if race_date is a timestamp (from EventBridge)
+        if race_date.startswith('20') and 'T' in race_date:
+            # Convert timestamp to date only
+            race_date = race_date.split('T')[0]
     elif 'detail' in event and 'race_date' in event['detail']:
         race_date = event['detail']['race_date']
     
+    # If no race date provided, use current date
     if not race_date:
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'error': 'No race date provided'})
-        }
+        from datetime import date
+        race_date = date.today().isoformat()
+        print(f"No race date provided, using current date: {race_date}")
     
     country = event.get('country', None)
     year = event.get('year', None)
+    
+    print(f"Looking for race data on date: {race_date}")
     
     # Get the session key for the race
     session_info = get_session_key(race_date, country, year)
