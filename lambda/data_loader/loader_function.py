@@ -3,12 +3,48 @@ import json
 import os
 from datetime import datetime
 import requests
+import base64
 
-SUPABASE_URL = os.environ.get('SUPABASE_URL')
-SUPABASE_KEY = os.environ.get('SUPABASE_KEY')
+# Secret name for Supabase credentials
+SECRET_NAME = os.environ.get('SUPABASE_SECRET_NAME', 'f1-data-supabase-credentials')
+
+# Initialize the Secrets Manager client
+secrets_client = boto3.client('secretsmanager')
+
+# Initialize with empty values, will be loaded from secrets manager
+SUPABASE_URL = None
+SUPABASE_KEY = None
+
+def get_supabase_credentials():
+    global SUPABASE_URL, SUPABASE_KEY
+    
+    try:
+        # Get the secret
+        response = secrets_client.get_secret_value(SecretId=SECRET_NAME)
+        
+        # Parse the secret JSON
+        if 'SecretString' in response:
+            secret = json.loads(response['SecretString'])
+            SUPABASE_URL = secret.get('SUPABASE_URL')
+            SUPABASE_KEY = secret.get('SUPABASE_KEY')
+        else:
+            # If binary, decode it
+            decoded_binary = base64.b64decode(response['SecretBinary'])
+            secret = json.loads(decoded_binary)
+            SUPABASE_URL = secret.get('SUPABASE_URL')
+            SUPABASE_KEY = secret.get('SUPABASE_KEY')
+        
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            raise ValueError("Supabase credentials not found in secret")
+            
+    except Exception as e:
+        print(f"Error retrieving Supabase credentials: {str(e)}")
+        raise
 
 s3 = boto3.client('s3')
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'f1-raw-data-794431322648')
+BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+if not BUCKET_NAME:
+    raise ValueError("S3_BUCKET_NAME environment variable is required")
 
 def insert_data(table_name, data):
     url = f"{SUPABASE_URL}/rest/v1/{table_name}"
@@ -168,13 +204,6 @@ def process_s3_file(s3_key):
         return False
 
 def process_all_files():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        print("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
-        return {
-            'statusCode': 400,
-            'body': json.dumps({'error': 'Missing Supabase credentials'})
-        }
-    
     # List S3 files
     files = list_s3_files()
     print(f"Found {len(files)} files in S3")
@@ -197,9 +226,36 @@ def process_all_files():
 
 def lambda_handler(event, context):
     try:
+        # Validate event input
+        if not isinstance(event, dict):
+            print(f"Invalid event format: {event}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid event format'})
+            }
+        
+        # Get Supabase credentials from Secrets Manager
+        get_supabase_credentials()
+        
         # Check for specific file to process
         if 'file_key' in event:
             file_key = event['file_key']
+            # Validate file_key
+            if not isinstance(file_key, str) or not file_key.strip():
+                print(f"Invalid file_key: {file_key}")
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({'error': 'Invalid file_key'})
+                }
+            
+            # Sanitize file_key to prevent path traversal
+            if '..' in file_key or file_key.startswith('/'):
+                print(f"Potential path traversal in file_key: {file_key}")
+                return {
+                    'statusCode': 400,
+                    'body': json.dumps({'error': 'Invalid file path'})
+                }
+            
             success = process_s3_file(file_key)
             if success:
                 return {

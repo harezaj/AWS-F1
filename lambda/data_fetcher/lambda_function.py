@@ -9,7 +9,9 @@ BASE_URL = 'https://api.openf1.org/v1'
 
 # S3 bucket for storing raw data
 s3 = boto3.client('s3')
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', 'f1-raw-data-794431322648')
+BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+if not BUCKET_NAME:
+    raise ValueError("S3_BUCKET_NAME environment variable is required")
 
 def get_session_key(race_date=None, country=None, year=None):
     print(f"Fetching session key for race: date={race_date}, country={country}, year={year}")
@@ -85,16 +87,37 @@ def save_to_s3(data, s3_key):
         return False
 
 def lambda_handler(event, context):
+    # Validate event input
+    if not isinstance(event, dict):
+        print(f"Invalid event format: {event}")
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'error': 'Invalid event format'})
+        }
+    
     # Extract race date from the event
     race_date = None
     if 'race_date' in event:
         race_date = event['race_date']
+        # Validate date format
+        if not isinstance(race_date, str):
+            print(f"Invalid race_date format: {race_date}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid race_date format'})
+            }
         # Check if race_date is a timestamp (from EventBridge)
         if race_date.startswith('20') and 'T' in race_date:
             # Convert timestamp to date only
             race_date = race_date.split('T')[0]
-    elif 'detail' in event and 'race_date' in event['detail']:
+    elif 'detail' in event and isinstance(event['detail'], dict) and 'race_date' in event['detail']:
         race_date = event['detail']['race_date']
+        if not isinstance(race_date, str):
+            print(f"Invalid race_date in detail: {race_date}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid race_date in detail'})
+            }
     
     # If no race date provided, use previous day's date
     if not race_date:
@@ -103,8 +126,25 @@ def lambda_handler(event, context):
         race_date = yesterday.isoformat()
         print(f"No race date provided, using previous day's date: {race_date}")
     
+    # Validate optional parameters
     country = event.get('country', None)
+    if country is not None and not isinstance(country, str):
+        print(f"Invalid country format: {country}")
+        return {
+            'statusCode': 400,
+            'body': json.dumps({'error': 'Invalid country format'})
+        }
+    
     year = event.get('year', None)
+    if year is not None:
+        try:
+            year = int(year)
+        except (ValueError, TypeError):
+            print(f"Invalid year format: {year}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps({'error': 'Invalid year format'})
+            }
     
     print(f"Looking for race data on date: {race_date}")
     
