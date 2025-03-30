@@ -1,4 +1,4 @@
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     session_key INTEGER PRIMARY KEY,
     session_name TEXT,
     date_start TIMESTAMPTZ,
@@ -12,7 +12,7 @@ CREATE TABLE sessions (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE drivers (
+CREATE TABLE IF NOT EXISTS drivers (
     id BIGSERIAL PRIMARY KEY,
     session_key INTEGER REFERENCES sessions(session_key),
     driver_number INTEGER,
@@ -24,7 +24,7 @@ CREATE TABLE drivers (
     UNIQUE(session_key, driver_number)
 );
 
-CREATE TABLE weather (
+CREATE TABLE IF NOT EXISTS weather (
     id BIGSERIAL PRIMARY KEY,
     session_key INTEGER REFERENCES sessions(session_key),
     date TIMESTAMPTZ,
@@ -35,7 +35,7 @@ CREATE TABLE weather (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE pit_stops (
+CREATE TABLE IF NOT EXISTS pit_stops (
     id BIGSERIAL PRIMARY KEY,
     session_key INTEGER REFERENCES sessions(session_key),
     driver_number INTEGER,
@@ -44,7 +44,7 @@ CREATE TABLE pit_stops (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE TABLE stints (
+CREATE TABLE IF NOT EXISTS stints (
     id BIGSERIAL PRIMARY KEY,
     session_key INTEGER REFERENCES sessions(session_key),
     driver_number INTEGER,
