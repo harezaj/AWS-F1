@@ -96,11 +96,12 @@ def lambda_handler(event, context):
     elif 'detail' in event and 'race_date' in event['detail']:
         race_date = event['detail']['race_date']
     
-    # If no race date provided, use current date
+    # If no race date provided, use previous day's date
     if not race_date:
-        from datetime import date
-        race_date = date.today().isoformat()
-        print(f"No race date provided, using current date: {race_date}")
+        from datetime import date, timedelta
+        yesterday = date.today() - timedelta(days=1)
+        race_date = yesterday.isoformat()
+        print(f"No race date provided, using previous day's date: {race_date}")
     
     country = event.get('country', None)
     year = event.get('year', None)
