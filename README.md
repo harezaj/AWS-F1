@@ -1,6 +1,6 @@
 ## 🏁 F1 Data Explorer – Tech Stack & Data Flow
 
-This project uses a modern, serverless architecture to fetch, process, and visualize Formula 1 data from [openf1.org](https://openf1.org).
+This project uses a modern, serverless architecture to fetch, process, and (maybe) visualize Formula 1 data from [openf1.org](https://openf1.org).
 
 ---
 
@@ -34,16 +34,16 @@ This project uses a modern, serverless architecture to fetch, process, and visua
 - Provides REST and GraphQL APIs for frontend access.
 - Optional: Supabase Auth for user-based access control.
 
----
+# Future Improvements
 
-### 6. **Next.js (Frontend Web App)**
+### 1. **Next.js (Frontend Web App)**
 - Fetches data from Supabase via API calls.
 - Renders dashboards and pages using server-side or static generation.
 - Handles routing and user interaction.
 
 ---
 
-### 7. **Visualization Libraries (Client-Side Charts)**
+### 2. **Visualization Libraries (Client-Side Charts)**
 - **Chart.js** – Clean, lightweight charts.
 - **Plotly.js** – Interactive, detailed visualizations.
 - **D3.js** – Custom, granular data-driven visuals.
