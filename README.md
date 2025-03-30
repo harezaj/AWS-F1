@@ -1,6 +1,6 @@
 ## 🏁 F1 Data Explorer – Tech Stack & Data Flow
 
-This project uses a modern, serverless architecture to fetch, process, and visualize Formula 1 data from [openf1.org](https://openf1.org).
+This project uses a modern, serverless architecture to fetch, process, and (maybe) visualize Formula 1 data from [openf1.org](https://openf1.org).
 
 ---
 
